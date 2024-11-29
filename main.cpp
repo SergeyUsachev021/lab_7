@@ -1,20 +1,21 @@
-#include <iostream> // Подключаем библиотеку для ввода-вывода
-#include <string> // Подключаем библиотеку для работы со строками
-#include <vector> // Подключаем библиотеку для работы с векторами
-#include <filesystem> // Подключаем библиотеку для работы с файловой системой
-#include <boost/crc.hpp> // Подключаем библиотеку Boost для вычисления CRC32
-#include <unordered_map> // Подключаем библиотеку для работы с хеш-таблицами
-#include <algorithm> // Подключаем библиотеку для алгоритмов (например, сортировка)
-#include <fstream> // Подключаем библиотеку для работы с файлами
-#include <regex> // Подключаем библиотеку для работы с регулярными выражениями
-#include <set> // Подключаем библиотеку для работы с множествами (для хранения дубликатов)
+#include <iostream>
+#include <string>
+#include <vector>
+#include <filesystem>
+#include <boost/crc.hpp> // Для CRC32
+#include <unordered_map>
+#include <algorithm>
+#include <fstream>
+#include <regex>
+// #include <boost/regex.hpp> // регулярные выражения для обработки строк
+#include <set> // Для хранения дубликатов
 
-namespace fs = std::filesystem; // Создаем псевдоним для пространства имен файловой системы
+namespace fs = std::filesystem;
 
 // Функция для вычисления CRC32
 uint32_t calculate_crc32(const std::string& data) {
     boost::crc_32_type crc; // Создаем объект для вычисления CRC32
-    crc.process_bytes(data.data(), data.size()); // Обрабатываем данные, переданные в функцию
+    crc.process_bytes(data.data(), data.size()); // Обрабатываем данные
     return crc.checksum(); // Возвращаем полученную контрольную сумму
 }
 
@@ -23,63 +24,69 @@ std::vector<uint32_t> file_processing(const fs::path& filePath, size_t blockSize
     std::vector<uint32_t> hashSequence; // Вектор для хранения хэшей блоков
     std::ifstream file(filePath, std::ios::binary); // Открываем файл в бинарном режиме
 
-    if (!file) { // Проверяем, удалось ли открыть файл
-        throw std::runtime_error("Cannot open file: " + filePath.string()); // Выбрасываем исключение, если файл не удалось открыть
+    if (!file) {
+        throw std::runtime_error("Cannot open file: " + filePath.string());
     }
 
-    std::string buffer(blockSize, '\0'); // Создаем буфер заданного размера, инициализируя его нулями
+    std::string buffer(blockSize, '\0'); // Буфер для чтения блоков
 
-    while (file.read(&buffer[0], blockSize) || file.gcount() > 0) { 
-        size_t bytesRead = static_cast<size_t>(file.gcount()); // Получаем количество прочитанных байтов
-        buffer.resize(bytesRead); // Урезаем буфер до фактического размера прочитанных данных
+    while (file.read(&buffer[0], blockSize) || file.gcount() > 0) { // чтение данных из файла блоками
+        // Урезаем буфер до фактического размера прочитанных данных
+        size_t bytesRead = static_cast<size_t>(file.gcount()); // количество прочитанных байтов
+        buffer.resize(bytesRead); // обновление размера буфера до количества прочитанных байтов
         
-        if (bytesRead < blockSize) { // Если прочитано меньше байтов, чем размер блока
-            buffer.resize(blockSize, '\0'); // Дополняем до размера блока нулями
+        // Дополняем до размера блока нулями
+        if (bytesRead < blockSize) {
+            buffer.resize(blockSize, '\0');
         }
 
-        uint32_t hash = calculate_crc32(buffer); // Вычисляем хэш блока и сохраняем его
-        hashSequence.push_back(hash); // Добавляем хэш в последовательность
+        // Вычисляем хэш блока и добавляем в последовательность
+        uint32_t hash = calculate_crc32(buffer);
+        hashSequence.push_back(hash);
     }
 
     return hashSequence; // Возвращаем вектор хэшей
 }
 
 // Функция для сравнения двух файлов по их хэшам
-bool compare_hashes(const std::vector<uint32_t>& hashes1, const std::vector<uint32_t>& hashes2) {
+bool compare_hashes(const std::vector<uint32_t>& hashes1, const std::vector<uint32_t>& hashes2) { 
     if (hashes1.size() != hashes2.size()) return false; // Если размеры разные, файлы разные
 
-    for (size_t i = 0; i < hashes1.size(); ++i) { 
+    for (size_t i = 0; i < hashes1.size(); ++i) {
         if (hashes1[i] != hashes2[i]) return false; // Если хотя бы один хэш не совпадает, файлы разные
     }
 
-    return true; // Если все хэши совпадают, файлы идентичны
+    return true; // Файлы идентичны
 }
 
-// Функция для обработки каждого файла в директории
 void shouldProcessFile(const fs::directory_entry& entry, const std::vector<fs::path>& exclusions, size_t minSize, const std::regex& maskRegex, size_t blockSize, std::vector<std::pair<fs::path, std::vector<uint32_t>>>& hashVector) {
     if (entry.is_regular_file()) {  // Проверяем, является ли это обычным файлом
-        
-        if (std::find(exclusions.begin(), exclusions.end(), entry.path().parent_path()) != exclusions.end()) { 
-            return; // Пропускаем файл, если его родительская директория в списке исключений
+        // Проверка на исключения. если родительская директория в списке исключений, пропускаем файл
+        if (std::find(exclusions.begin(), exclusions.end(), entry.path().parent_path()) != exclusions.end()) {
+            return;
         }
 
-        if (entry.file_size() < minSize) { 
-            return; // Пропускаем файл, если его размер меньше минимального значения
+        // Проверка минимального размера файла
+        if (entry.file_size() < minSize) {
+            return;
         }
 
-        if (!std::regex_match(entry.path().filename().string(), maskRegex)) { 
-            return; // Пропускаем файл, если его имя не соответствует маске регулярного выражения
+        // Проверка маски имени файла
+        if (!std::regex_match(entry.path().filename().string(), maskRegex)) {
+            return;
         }
-
         auto hashes = file_processing(entry.path(), blockSize); // Получаем хэши файла по блокам
+        // Сохраняем путь к файлу и его хэши в hashVector
+        hashVector.emplace_back(entry.path(), hashes);
 
-        hashVector.emplace_back(entry.path(), hashes); // Сохраняем путь к файлу и его хэши в hashVector
-
-        /* 
-           Альтернативное решение было закомментировано. 
-           Оно пыталось сохранить пути к файлам в словаре на основе их хэшей.
-           Однако это решение не удовлетворяет условиям лабораторной работы.
-        */
+        //мое лучшее решение в жизни, но не удовлетворяет условиям лабы :(
+        // try {
+        //     auto hashes = file_processing(entry.path(), blockSize);
+        //     std::string hashKey(reinterpret_cast<const char*>(hashes.data()), hashes.size() * sizeof(uint32_t));
+        //     hashMap[hashKey].push_back(entry.path());
+        // } catch (const std::exception& e) {
+        //     std::cerr << e.what() << std::endl;
+        // }     
     }
 }
 
@@ -88,140 +95,131 @@ void find_duplicates(const std::vector<fs::path>& directories, const std::vector
     std::unordered_map<std::string, std::set<fs::path>> hashMap; // Словарь для хранения путей дубликатов
     std::vector<std::pair<fs::path, std::vector<uint32_t>>> hashVector; // Вектор для хранения всех обработанных файлов и их хэшей
 
-    for (const auto& dir : directories) { // Проходим по всем указанным директориям
-        if (!fs::exists(dir) || !fs::is_directory(dir)) { // Проверяем, существует ли директория и является ли она директорией
-            std::cerr << "Директория не существует или не является директорией: " << dir << std::endl; 
-            continue; // Переходим к следующей директории
+    for (const auto& dir : directories) {
+        if (!fs::exists(dir) || !fs::is_directory(dir)) {
+            std::cerr << "Директория не существует или не является директорией: " << dir << std::endl;
+            continue;
         }
 
         // Выбор итератора в зависимости от уровня сканирования
-        if (scanLevel == 0) { // Если уровень сканирования 0 (только указанная директория без вложенных)
-            for (const auto& entry : fs::directory_iterator(dir)) { // Проходим по всем элементам в директории
-                shouldProcessFile(entry, exclusions, minSize, maskRegex, blockSize, hashVector); // Обрабатываем файл
+        if (scanLevel == 0) { // Только указанная директория без вложенных
+            for (const auto& entry : fs::directory_iterator(dir)) {
+                shouldProcessFile(entry, exclusions, minSize, maskRegex, blockSize, hashVector);
+                
             }
-        } else { // Если уровень сканирования 1 (рекурсивное сканирование)
-            for (const auto& entry : fs::recursive_directory_iterator(dir)) { // Проходим по всем элементам рекурсивно
-                shouldProcessFile(entry, exclusions, minSize, maskRegex, blockSize, hashVector); // Обрабатываем файл
+        } else { // Рекурсивное сканирование
+            for (const auto& entry : fs::recursive_directory_iterator(dir)) {
+                shouldProcessFile(entry, exclusions, minSize, maskRegex, blockSize, hashVector);
+                
             }
         }
     }
-
     // Сравнение хешей и добавление дубликатов в hashMap
-    for (size_t i = 0; i < hashVector.size(); ++i) { // Проходим по всем обработанным файлам
-        for (size_t j = i + 1; j < hashVector.size(); ++j) { // Сравниваем с остальными файлами
+    for (size_t i = 0; i < hashVector.size(); ++i) {
+        for (size_t j = i + 1; j < hashVector.size(); ++j) {
             if (compare_hashes(hashVector[i].second, hashVector[j].second)) {  // Если файлы идентичны по хэшам
-                std::string hashKey(reinterpret_cast<const char*>(hashVector[i].second.data()), hashVector[i].second.size() * sizeof(uint32_t)); // Создаем ключ для хеш-таблицы из хэшей файла
-                hashMap[hashKey].insert(hashVector[i].first); // Добавляем путь первого файла в словарь дубликатов
-                hashMap[hashKey].insert(hashVector[j].first); // Добавляем путь второго файла в словарь дубликатов
+                std::string hashKey(reinterpret_cast<const char*>(hashVector[i].second.data()), hashVector[i].second.size() * sizeof(uint32_t)); // последовательность байтов из вектора хэшей
+                hashMap[hashKey].insert(hashVector[i].first);
+                hashMap[hashKey].insert(hashVector[j].first);
             }
         }
     }
 
     // Вывод результатов
-    for (const auto& pair : hashMap) { // Проходим по всем найденным дубликатам в словаре
-        std::cout << "Дубликаты:\n"; // Выводим заголовок для группы дубликатов
-        for (const auto& file : pair.second) { // Проходим по всем файлам в группе дубликатов
-            std::cout << file << std::endl; // Выводим путь к файлу
+    for (const auto& pair : hashMap) {
+        std::cout << "Дубликаты:\n";
+        for (const auto& file : pair.second) {
+            std::cout << file << std::endl;
         }
-        std::cout << std::endl; // Разделяем группы дубликатов пустой строкой
+        std::cout << std::endl;
+        
     }
 
-    /*
-    Закомментированный код ниже - альтернативный способ вывода результатов,
-    который проверяет наличие дубликатов и выводит только те группы,
-    которые содержат более одного файла.
-    */
-    /*
-    for (const auto& [hashKey, files] : hashMap) {
-        if (files.size() > 1) { // Если есть дубликаты
-            std::cout << "Дубликаты:\n"; 
-            for (const auto& file : files) {
-                std::cout << file << std::endl; 
-            }
-            std::cout << std::endl; // Разделяем группы дубликатов пустой строкой
-        }
-    }
-    */
+    // // Вывод результатов
+    // for (const auto& [hashKey, files] : hashMap) {
+    //     if (files.size() > 1) { // Если есть дубликаты
+    //         std::cout << "Дубликаты:\n";
+    //         for (const auto& file : files) {
+    //             std::cout << file << std::endl;
+    //         }
+    //         std::cout << std::endl; // Разделяем группы дубликатов пустой строкой
+    //     }
+    // }
 }
 
-int main() { // Начало функции main, точки входа в программу
-    std::vector<fs::path> directories; // Вектор для хранения путей директорий для сканирования
-    std::vector<fs::path> exclusions; // Вектор для хранения путей директорий, которые нужно исключить из сканирования
-    size_t blockSize = 4096; // Значение по умолчанию для размера блока чтения файла
-    size_t minSize = 1; // Минимальный размер файла по умолчанию
-    int scanLevel = 1; // Уровень сканирования по умолчанию (1 - рекурсивное)
+int main() {
+    std::vector<fs::path> directories;
+    std::vector<fs::path> exclusions;
+    size_t blockSize = 4096; // Значение по умолчанию
+    size_t minSize = 1;      // Минимальный размер файла по умолчанию
+    int scanLevel = 1;       // Уровень сканирования по умолчанию (1 - рекурсивное)
 
     // Запрос директорий для сканирования
-    int numDirs; // Переменная для хранения количества директорий
-    std::cout << "Введите количество директорий для сканирования: "; 
-    std::cin >> numDirs; // Чтение количества директорий
+    int numDirs;
+    std::cout << "Введите количество директорий для сканирования: ";
+    std::cin >> numDirs;
 
-    for (int i = 0; i < numDirs; ++i) { // Цикл для ввода каждой директории
-        fs::path dir; // Переменная для хранения пути к директории
-        std::cout << "Введите путь к директории " << (i + 1) << ": "; 
-        std::cin >> dir; // Чтение пути к директории
-        directories.push_back(dir); // Добавление введенной директории в вектор
+    for (int i = 0; i < numDirs; ++i) {
+        fs::path dir;
+        std::cout << "Введите путь к директории " << (i + 1) << ": ";
+        std::cin >> dir;
+        directories.push_back(dir);
     }
 
     // Запрос директорий для исключения
-    int numExclusions; // Переменная для хранения количества исключаемых директорий
-    std::cout << "Введите количество директорий для исключения: "; 
-    std::cin >> numExclusions; // Чтение количества исключаемых директорий
+    int numExclusions;
+    std::cout << "Введите количество директорий для исключения: ";
+    std::cin >> numExclusions;
 
-    for (int i = 0; i < numExclusions; ++i) { // Цикл для ввода каждой исключаемой директории
-        fs::path exclDir; // Переменная для хранения пути к исключаемой директории
-        std::cout << "Введите путь к директории для исключения " << (i + 1) << ": "; 
-        std::cin >> exclDir; // Чтение пути к исключаемой директории
-        exclusions.push_back(exclDir); // Добавление введенной директории в вектор исключений
+    for (int i = 0; i < numExclusions; ++i) {
+        fs::path exclDir;
+        std::cout << "Введите путь к директории для исключения " << (i + 1) << ": ";
+        std::cin >> exclDir;
+        exclusions.push_back(exclDir);
     }
 
     // Запрос уровня сканирования
-    std::cout << "Введите уровень сканирования (0 - только указанная директория без вложенных, 1 - рекурсивное): "; 
-    std::cin >> scanLevel; // Чтение уровня сканирования
+    std::cout << "Введите уровень сканирования (0 - только указанная директория без вложенных, 1 - рекурсивное): ";
+    std::cin >> scanLevel;
 
     // Запрос маски имен файлов
-    std::string maskString; // Переменная для хранения маски имен файлов
-    std::cout << "Введите маску имен файлов разрешенных для сравнения (например, *.txt или file?.txt): "; 
-    std::cin >> maskString; // Чтение маски имен файлов
+    std::string maskString;
+    std::cout << "Введите маску имен файлов разрешенных для сравнения (например, *.txt или file?.txt): ";
+    std::cin >> maskString;
 
     // Преобразуем маску в регулярное выражение
-    std::regex star_regex("\\*"); // Регулярное выражение для символа '*'
-    std::regex question_regex("\\?"); // Регулярное выражение для символа '?'
-    
-    maskString = "^" + std::regex_replace(maskString, star_regex, ".*"); // Заменяем '*' на '.*' и добавляем начало строки
-    maskString = std::regex_replace(maskString, question_regex, "."); // Заменяем '?' на '.'
-    
-    maskString += "$"; // Добавляем конец строки к регулярному выражению
+    std::regex star_regex("\\*");
+    std::regex question_regex("\\?");
+    maskString = "^" + std::regex_replace(maskString, star_regex, ".*"); // Заменяем * на .*
+    maskString = std::regex_replace(maskString, question_regex, "."); // Заменяем ? на .
+    maskString += "$"; // Добавляем конец строки
 
-    std::cout << "Регулярное выражение: " << maskString << std::endl; // Выводим полученное регулярное выражение на экран
+    std::cout << "Регулярное выражение: " << maskString << std::endl;
     
     // Запрос минимального размера файла
-    std::cout << "Введите минимальный размер файла (по умолчанию 1): "; 
-    size_t inputminSize; // Переменная для хранения введенного минимального размера файла
-    
-    if (std::cin >> inputminSize && inputminSize > 0) { // Если пользователь ввел корректный размер больше нуля
-        minSize = inputminSize; // Устанавливаем минимальный размер файла на основе пользовательского ввода
+    std::cout << "Введите минимальный размер файла (по умолчанию 1): ";
+    size_t inputminSize;
+    if (std::cin >> inputminSize && inputminSize > 0) {
+        minSize = inputminSize;
     }
 
     // Запрос размера блока
-    std::cout << "Введите размер блока (по умолчанию 4096): "; 
-    size_t inputBlockSize; // Переменная для хранения введенного размера блока
-    
-    if (std::cin >> inputBlockSize && inputBlockSize > 0) { // Если пользователь ввел корректный размер больше нуля
-        blockSize = inputBlockSize; // Устанавливаем размер блока на основе пользовательского ввода
+    std::cout << "Введите размер блока (по умолчанию 4096): ";
+    size_t inputBlockSize;
+    if (std::cin >> inputBlockSize && inputBlockSize > 0) {
+        blockSize = inputBlockSize;
     }
 
     try {
-        std::regex maskRegex(maskString, std::regex_constants::icase); // Создаем регулярное выражение с игнорированием регистра
+        std::regex maskRegex(maskString, std::regex_constants::icase); // Игнорируем регистр
 
-        find_duplicates(directories, exclusions, blockSize, minSize, maskRegex, scanLevel); // Вызываем функцию поиска дубликатов с заданными параметрами
+        find_duplicates(directories, exclusions, blockSize, minSize, maskRegex, scanLevel);
         
-    } catch (const std::regex_error& e) { 
-        std::cerr << "Ошибка в регулярном выражении: " << e.what() << '\n'; 
-        return 1; // Возвращаем код ошибки 1 при возникновении исключения
+    } catch (const std::regex_error& e) {
+        std::cerr << "Ошибка в регулярном выражении: " << e.what() << '\n';
+        return 1;
     }
-    
-    return 0; // Завершаем программу с кодом успешного завершения 0
+    return 0;
 }
 
 // //./lab7 -p C:/Users/Sopha/Downloads/lab7/dir1 -p C:/Users/Sopha/Downloads/lab7/dir2 -e C:/Users/Sopha/Downloads/lab7/dir1/dirindir1 -b 5 -m "*.txt" -s 1 -min 1
