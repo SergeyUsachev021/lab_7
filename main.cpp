@@ -19,7 +19,7 @@ uint32_t calculate_crc32(const std::string& data) {
     return crc.checksum(); // Возвращаем полученную контрольную сумму
 }
 
-// Функция для обработки файла и получения последовательности хэшей 
+// Функция для обработки файла и получения последовательности хэшей  
 std::vector<uint32_t> file_processing(const fs::path& filePath, size_t blockSize) {
     std::vector<uint32_t> hashSequence; // Вектор для хранения хэшей блоков
     std::ifstream file(filePath, std::ios::binary); // Открываем файл в бинарном режиме
