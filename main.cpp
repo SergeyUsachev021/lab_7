@@ -84,7 +84,7 @@ void find_duplicates(const std::vector<fs::path>& directories, const std::vector
     std::unordered_map<std::string, std::set<fs::path>> hashMap; // Словарь для хранения путей дубликатов
     std::vector<std::pair<fs::path, std::vector<uint32_t>>> hashVector; // Вектор для хранения всех обработанных файлов и их хэшей
 
-    for (const auto& dir : directories) { // Проходим по всем указанным директориям
+    for (const auto& dir : directories) { 
         if (!fs::exists(dir) || !fs::is_directory(dir)) { 
             std::cerr << "Директория не существует или не является директорией: " << dir << std::endl; 
             continue; // Переходим к следующей директории
