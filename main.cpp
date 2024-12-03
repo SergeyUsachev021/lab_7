@@ -13,21 +13,21 @@ namespace fs = std::filesystem; // Создаем псевдоним для пр
 
 // Функция для вычисления CRC32
 uint32_t calculate_crc32(const std::string& data) {
-    boost::crc_32_type crc; // Создаем объект для вычисления CRC32
-    crc.process_bytes(data.data(), data.size()); // Обрабатываем данные, переданные в функцию
-    return crc.checksum(); // Возвращаем полученную контрольную сумму
+    boost::crc_32_type crc; 
+    crc.process_bytes(data.data(), data.size()); 
+    return crc.checksum(); 
 }
 
 // Функция для обработки файла и получения последовательности хэшей  
 std::vector<uint32_t> file_processing(const fs::path& filePath, size_t blockSize) {
     std::vector<uint32_t> hashSequence; // Вектор для хранения хэшей блоков
-    std::ifstream file(filePath, std::ios::binary); // Открываем файл в бинарном режиме
+    std::ifstream file(filePath, std::ios::binary); 
 
-    if (!file) { // Проверяем, удалось ли открыть файл
-        throw std::runtime_error("Cannot open file: " + filePath.string()); // Выбрасываем исключение, если файл не удалось открыть
+    if (!file) { 
+        throw std::runtime_error("Cannot open file: " + filePath.string()); 
     }
 
-    std::string buffer(blockSize, '\0'); // Создаем буфер заданного размера, инициализируя его нулями
+    std::string buffer(blockSize, '\0'); 
 
     while (file.read(&buffer[0], blockSize) || file.gcount() > 0) { // Чтение данных из файла блоками
         size_t bytesRead = static_cast<size_t>(file.gcount()); // Получаем количество прочитанных байтов
@@ -49,10 +49,10 @@ bool compare_hashes(const std::vector<uint32_t>& hashes1, const std::vector<uint
     if (hashes1.size() != hashes2.size()) return false; // Если размеры разные, файлы разные
 
     for (size_t i = 0; i < hashes1.size(); ++i) { 
-        if (hashes1[i] != hashes2[i]) return false; // Если хотя бы один хэш не совпадает, файлы разные
+        if (hashes1[i] != hashes2[i]) return false; 
     }
 
-    return true; // Если все хэши совпадают, файлы идентичны
+    return true; 
 }
 
 // Функция для обработки каждого файла в директории
@@ -85,7 +85,7 @@ void find_duplicates(const std::vector<fs::path>& directories, const std::vector
     std::vector<std::pair<fs::path, std::vector<uint32_t>>> hashVector; // Вектор для хранения всех обработанных файлов и их хэшей
 
     for (const auto& dir : directories) { // Проходим по всем указанным директориям
-        if (!fs::exists(dir) || !fs::is_directory(dir)) { // Проверяем, существует ли директория и является ли она директорией
+        if (!fs::exists(dir) || !fs::is_directory(dir)) { // Проверяем, существует ли директория и является ли она директорией 
             std::cerr << "Директория не существует или не является директорией: " << dir << std::endl; 
             continue; // Переходим к следующей директории
         }
