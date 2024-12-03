@@ -82,7 +82,7 @@ void shouldProcessFile(const fs::directory_entry& entry, const std::vector<fs::p
 // Функция для поиска дубликатов
 void find_duplicates(const std::vector<fs::path>& directories, const std::vector<fs::path>& exclusions, size_t blockSize, size_t minSize, std::regex& maskRegex, int scanLevel) {
     std::unordered_map<std::string, std::set<fs::path>> hashMap; // Словарь для хранения путей дубликатов
-    std::vector<std::pair<fs::path, std::vector<uint32_t>>> hashVector; // Вектор для хранения всех обработанных файлов и их хэшей
+    std::vector<std::pair<fs::path, std::vector<uint32_t>>> hashVector; 
 
     for (const auto& dir : directories) { 
         if (!fs::exists(dir) || !fs::is_directory(dir)) { 
